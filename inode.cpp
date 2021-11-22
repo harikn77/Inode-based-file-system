@@ -32,6 +32,7 @@ struct file_info {
 };
 
 map<string, file_info> files;
+map<int,string> fd_to_file;
 char inode_bitmap[NUM_OF_INODES];
 char data_bitmap[NUM_OF_DATA_BLOCKS];
 superblock sb;
@@ -163,9 +164,10 @@ void open_file(string fname) {
   cin >> mode;
   files[fname].mode = mode;
   files[fname].fd = global_fd++;
+  fd_to_file[files[fname].fd] = fname;
   string modes[3] = {"read", "write", "append"};
-  cout << "file opened in " << modes[mode] << " mode with fd: " << files[fname].fd
-       << endl;
+  cout << "file opened in " << modes[mode]
+       << " mode with fd: " << files[fname].fd << endl;
 }
 void read_disk(fstream &disk) {
   disk.seekg(BLOCK_SIZE, ios::beg);
@@ -266,9 +268,24 @@ start:
             cout << "Coming soon!\n";
             break;
           }
+          case 6: {
+            cout << "enter the fd: ";
+            int fd;
+            cin >> fd;
+            if(fd_to_file.find(fd) == fd_to_file.end()) 
+              cout << "invalid fd\n";
+            else {
+              string fname = fd_to_file[fd];
+              files[fname].fd = -1;
+              fd_to_file.erase(fd);
+              cout << "file is closed\n";
+            }
+            break;
+          }
           case 10: {
             cout << "disk unmounted\n";
             files.clear();
+            fd_to_file.clear();
             global_fd = 0;
             disk.close();
             disk_mounted = false;
