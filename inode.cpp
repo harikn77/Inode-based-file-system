@@ -1,13 +1,18 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 using namespace std;
 const int DISK_SIZE = 256 * 1024; // 256KB
-const int BLOCK_SIZE = 4096; // 4KB
-const int INODE_SIZE = 256; // 256B
+const int BLOCK_SIZE = 4096;      // 4KB
+const int INODE_SIZE = 256;       // 256B
 const int NUM_OF_INODE_BLOCKS = 5;
+const int NUM_OF_INODES = NUM_OF_INODE_BLOCKS * (BLOCK_SIZE / INODE_SIZE);
+const int NUM_OF_DATA_BLOCKS = DISK_SIZE / BLOCK_SIZE;
+
 struct superblock {
   int nblocks;
   int ninodes;
@@ -20,53 +25,59 @@ struct inode {
   int single_indirect;
   int double_indirect;
 };
-void create_disk(string disk_name){
+
+map<string, int> files;
+char inode_bitmap[NUM_OF_INODES];
+char data_bitmap[NUM_OF_DATA_BLOCKS];
+superblock sb;
+
+void create_disk(string disk_name) {
   ofstream disk(disk_name, ios::out | ios::binary);
   superblock sb;
-  sb.nblocks = DISK_SIZE / BLOCK_SIZE;
-  sb.ninodes = NUM_OF_INODE_BLOCKS * (BLOCK_SIZE / INODE_SIZE);
+  sb.nblocks = NUM_OF_DATA_BLOCKS;
+  sb.ninodes = NUM_OF_INODES;
   disk.write((char *)&sb, sizeof(superblock));
   disk.seekp(BLOCK_SIZE, ios::beg);
-  string inode_bitmap = string(BLOCK_SIZE-1, '0');
-  string data_bitmap = string(BLOCK_SIZE-1, '0');
+  string inode_bitmap = string(NUM_OF_INODES, '0');
+  string data_bitmap = string(NUM_OF_DATA_BLOCKS, '0');
   disk.write(inode_bitmap.c_str(), BLOCK_SIZE);
   disk.seekp(2 * BLOCK_SIZE, ios::beg);
   disk.write(data_bitmap.c_str(), BLOCK_SIZE);
-  disk.seekp(DISK_SIZE-1, ios::beg);
+  disk.seekp(DISK_SIZE - 1, ios::beg);
   disk.write("\0", 1);
   disk.close();
 }
-void mount_disk(string disk_name){
-  ifstream disk(disk_name, ios::in | ios::binary);
-  superblock sb;
+bool mount_disk(fstream &disk) {
   disk.read((char *)&sb, sizeof(superblock));
   cout << "superblock: " << endl;
   cout << "nblocks: " << sb.nblocks << endl;
   cout << "ninodes: " << sb.ninodes << endl;
   disk.seekg(BLOCK_SIZE, ios::beg);
-  char inode_bitmap[BLOCK_SIZE];
-  disk.read(inode_bitmap, BLOCK_SIZE);
+
+  disk.read(inode_bitmap, NUM_OF_INODES);
   cout << "inode bitmap: " << endl;
-  for (int i = 0; i < BLOCK_SIZE; i++) {
+  for (int i = 0; i < NUM_OF_INODES; i++) {
     cout << inode_bitmap[i];
   }
   cout << endl;
   disk.seekg(2 * BLOCK_SIZE, ios::beg);
-  char data_bitmap[BLOCK_SIZE];
-  disk.read(data_bitmap, BLOCK_SIZE);
+  disk.read(data_bitmap, NUM_OF_DATA_BLOCKS);
   cout << "data bitmap: " << endl;
-  for (int i = 0; i < BLOCK_SIZE; i++) {
+  for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++) {
     cout << data_bitmap[i];
   }
   cout << endl;
-  disk.close();
+  return true;
 }
+bool disk_mounted = false;
 int main() {
+start:
   while (true) {
     cout << "1. create disk\n";
     cout << "2. mount disk\n";
     cout << "3. exit\n";
     int choice;
+    cout << "Enter your choice: ";
     cin >> choice;
     switch (choice) {
     case 1: {
@@ -81,14 +92,15 @@ int main() {
       cout << "enter the name of the disk: ";
       string name;
       cin >> name;
-      ifstream disk(name, ios::in | ios::binary);
+      fstream disk(name, ios::in | ios::binary);
       if (!disk) {
-        cout << "disk not found\n";
+        cout << "Disk not found" << endl;
         continue;
       } else {
+        mount_disk(disk);
+        disk_mounted = true;
         cout << "disk mounted\n";
-        mount_disk(name);
-        while (true) {
+        while (disk_mounted) {
           cout << "1. create file\n";
           cout << "2. open file\n";
           cout << "3. read file\n";
@@ -99,6 +111,7 @@ int main() {
           cout << "8. list files\n";
           cout << "9. list open files\n";
           cout << "10. unmount\n";
+          cout << "Enter your choice: ";
           int choice;
           cin >> choice;
           switch (choice) {
@@ -119,9 +132,14 @@ int main() {
             cin >> mode;
             cout << "Coming soon!\n";
           }
+          case 10: {
+            cout << "disk unmounted\n";
+            disk.close();
+            disk_mounted = false;
+            goto start;
+          }
           }
         }
-        break;
       }
     }
     case 3:
