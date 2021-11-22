@@ -282,6 +282,22 @@ start:
             }
             break;
           }
+          case 8: {
+            cout << "files: ";
+            for (auto it = files.begin(); it != files.end(); it++) {
+              cout << it->first << ", ";
+            }
+            cout << endl;
+            break;
+          }
+          case 9: {
+            cout << "open files: ";
+            for (auto it = fd_to_file.begin(); it != fd_to_file.end(); it++) {
+              cout << it->second << ", ";
+            }
+            cout << endl;
+            break;
+          }
           case 10: {
             cout << "disk unmounted\n";
             files.clear();
