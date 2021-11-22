@@ -1,11 +1,11 @@
 #include <algorithm>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
-#include <cstring>
 using namespace std;
 const int DISK_SIZE = 256 * 1024; // 256KB
 const int BLOCK_SIZE = 4096;      // 4KB
@@ -21,32 +21,36 @@ struct superblock {
 struct inode {
   char fname[100];
   int fsize;
-  int mode;
   int direct[10];
   int single_indirect;
   int double_indirect;
 };
+struct file_info {
+  int inode_num;
+  int fd;
+  int mode;
+};
 
-map<string, int> files;
+map<string, file_info> files;
 char inode_bitmap[NUM_OF_INODES];
 char data_bitmap[NUM_OF_DATA_BLOCKS];
 superblock sb;
-
+int global_fd;
 void create_disk(string disk_name) {
-  ofstream disk(disk_name, ios::out | ios::binary |ios::trunc);
+  ofstream disk(disk_name, ios::out | ios::binary | ios::trunc);
   superblock sb;
   sb.nblocks = NUM_OF_DATA_BLOCKS;
   sb.ninodes = NUM_OF_INODES;
   disk.write((char *)&sb, sizeof(superblock));
-  
+
   // string inode_bitmap = string(NUM_OF_INODES, '0');
   // string data_bitmap = string(NUM_OF_DATA_BLOCKS, '0');
-  for(int i=0;i<NUM_OF_INODES;i++)
+  for (int i = 0; i < NUM_OF_INODES; i++)
     inode_bitmap[i] = '0';
-  for(int i=0;i<NUM_OF_DATA_BLOCKS;i++)
+  for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++)
     data_bitmap[i] = '0';
   disk.seekp(BLOCK_SIZE, ios::beg);
-  disk.write(inode_bitmap, NUM_OF_INODES);  
+  disk.write(inode_bitmap, NUM_OF_INODES);
   disk.seekp(2 * BLOCK_SIZE, ios::beg);
   disk.write(data_bitmap, NUM_OF_DATA_BLOCKS);
   disk.seekp(DISK_SIZE, ios::beg);
@@ -69,16 +73,19 @@ void mount_disk(fstream &disk) {
   cout << endl;
   for (int i = 0; i < NUM_OF_INODES; i++) {
     if (inode_bitmap[i] == '1') {
-      disk.seekg(3*BLOCK_SIZE + i * INODE_SIZE, ios::beg);
+      disk.seekg(3 * BLOCK_SIZE + i * INODE_SIZE, ios::beg);
       inode temp;
       disk.read((char *)&temp, sizeof(inode));
-      files[temp.fname] = i;
+      file_info fi;
+      fi.inode_num = i;
+      fi.fd = -1;
+      files[temp.fname] = fi;
     }
   }
-  
+
   disk.seekg(2 * BLOCK_SIZE, ios::beg);
   disk.read(data_bitmap, NUM_OF_DATA_BLOCKS);
-  
+
   // cout << "data bitmap: " << endl;
   // for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++) {
   //   cout << data_bitmap[i];
@@ -109,8 +116,8 @@ void create_file(fstream &disk, string fname) {
       break;
     }
   }
-  for(int i=0;i<NUM_OF_DATA_BLOCKS;i++)
-    cout<<data_bitmap[i];
+  for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++)
+    cout << data_bitmap[i];
   cout << endl;
   if (data_index == -1) {
     cout << "no more data blocks, disk is full" << endl;
@@ -124,7 +131,6 @@ void create_file(fstream &disk, string fname) {
   inode new_inode;
   strcpy(new_inode.fname, fname.c_str());
   new_inode.fsize = 0;
-  new_inode.mode = 0;
   for (int i = 0; i < 10; i++) {
     new_inode.direct[i] = -1;
   }
@@ -133,8 +139,33 @@ void create_file(fstream &disk, string fname) {
   new_inode.double_indirect = -1;
   disk.seekp((3 * BLOCK_SIZE) + (inode_index * INODE_SIZE), ios::beg);
   disk.write((char *)&new_inode, sizeof(new_inode));
-  files[fname] = inode_index;
+  file_info fi;
+  fi.inode_num = inode_index;
+  fi.fd = -1;
+  files[fname] = fi;
+
   cout << "file created" << endl;
+}
+void open_file(string fname) {
+  if (files.find(fname) == files.end()) {
+    cout << "file does not exist" << endl;
+    return;
+  }
+  if (files[fname].fd != -1) {
+    cout << "file already opened, close it first to reopen again" << endl;
+    return;
+  }
+  cout << "0. read mode\n";
+  cout << "1. write mode\n";
+  cout << "2. append mode\n";
+  int mode;
+  cout << "select mode: ";
+  cin >> mode;
+  files[fname].mode = mode;
+  files[fname].fd = global_fd++;
+  string modes[3] = {"read", "write", "append"};
+  cout << "file opened in " << modes[mode] << " mode with fd: " << files[fname].fd
+       << endl;
 }
 void read_disk(fstream &disk) {
   disk.seekg(BLOCK_SIZE, ios::beg);
@@ -224,10 +255,8 @@ start:
             string name;
             cin >> name;
             // check if file exists
-            cout << "mode (r/w/p): ";
-            string mode;
-            cin >> mode;
-            cout << "Coming soon!\n";
+            open_file(name);
+            break;
           }
           case 3: {
             cout << "enter the name of the file: ";
@@ -239,6 +268,8 @@ start:
           }
           case 10: {
             cout << "disk unmounted\n";
+            files.clear();
+            global_fd = 0;
             disk.close();
             disk_mounted = false;
             goto start;
