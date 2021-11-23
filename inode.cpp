@@ -224,6 +224,54 @@ string read_from_user(){
   }
   return s;
 }
+void delete_file(fstream &disk, string fname) {
+  if (files.find(fname) == files.end()) {
+    cout << "file does not exist" << endl;
+    return;
+  }
+  if(files[fname].fd != -1){
+    cout << "file is open, close it first to delete" << endl;
+    return;
+  }
+  int inode_num = files[fname].inode_num;
+  disk.seekg((3 * BLOCK_SIZE) + (inode_num * INODE_SIZE), ios::beg);
+  inode temp;
+  disk.read((char *)&temp, sizeof(inode));
+  int direct_index = 0;
+  while(direct_index < 10 && temp.direct[direct_index] != -1) {
+    int data_index = temp.direct[direct_index];
+    data_bitmap[data_index] = '0';
+    direct_index++;
+  }
+  inode_bitmap[inode_num] = '0';
+  disk.seekp(BLOCK_SIZE, ios::beg);
+  disk.write(inode_bitmap, NUM_OF_INODES);
+  disk.seekp(2 * BLOCK_SIZE, ios::beg);
+  disk.write(data_bitmap, NUM_OF_DATA_BLOCKS);
+  files.erase(fname);
+  cout << "file deleted" << endl;
+}
+void write_file(fstream &disk,int fd) {
+  if (fd_to_file.find(fd) == fd_to_file.end()) {
+    cout << "invalid fd" << endl;
+    return;
+  }
+  string fname = fd_to_file[fd];
+  if (files[fname].mode != 1) {
+    cout << "file is not opened in write mode" << endl;
+    return;
+  }
+  int inode_num = files[fname].inode_num;
+  disk.seekg((3 * BLOCK_SIZE) + (inode_num * INODE_SIZE), ios::beg);
+  inode temp;
+  disk.read((char *)&temp, sizeof(inode));
+  string userinput = read_from_user();
+  int fsize = userinput.length();
+  int direct_index = 0;
+  while(direct_index < 10 && temp.direct[direct_index] != -1){
+    
+  }
+}
 void append_file(fstream &disk,int fd) {
   if (fd_to_file.find(fd) == fd_to_file.end()) {
     cout << "invalid fd" << endl;
@@ -389,6 +437,13 @@ start:
               fd_to_file.erase(fd);
               cout << "file is closed\n";
             }
+            break;
+          }
+          case 7: {
+            cout << "enter the name of the file: ";
+            string name;
+            cin >> name;
+            delete_file(disk, name);
             break;
           }
           case 8: {
