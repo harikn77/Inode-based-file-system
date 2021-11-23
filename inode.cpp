@@ -6,7 +6,6 @@
 #include <set>
 #include <string>
 #include <vector>
-#include <algorithm>
 using namespace std;
 const int DISK_SIZE = 256 * 1024; // 256KB
 const int BLOCK_SIZE = 4096;      // 4KB
@@ -35,7 +34,7 @@ struct file_info {
 };
 
 map<string, file_info> files;
-map<int,string> fd_to_file;
+map<int, string> fd_to_file;
 char inode_bitmap[NUM_OF_INODES];
 char data_bitmap[NUM_OF_DATA_BLOCKS];
 superblock sb;
@@ -45,7 +44,7 @@ void create_disk(string disk_name) {
   superblock sb;
   sb.nblocks = NUM_OF_DATA_BLOCKS;
   sb.ninodes = NUM_OF_INODES;
-  sb.inode_start = 3*BLOCK_SIZE;
+  sb.inode_start = 3 * BLOCK_SIZE;
   sb.data_start = sb.inode_start + NUM_OF_INODE_BLOCKS * BLOCK_SIZE;
   disk.write((char *)&sb, sizeof(superblock));
 
@@ -174,7 +173,7 @@ void open_file(string fname) {
   cout << "file opened in " << modes[mode]
        << " mode with fd: " << files[fname].fd << endl;
 }
-void read_file(fstream &disk,int fd) {
+void read_file(fstream &disk, int fd) {
   if (fd_to_file.find(fd) == fd_to_file.end()) {
     cout << "invalid fd" << endl;
     return;
@@ -194,29 +193,29 @@ void read_file(fstream &disk,int fd) {
     return;
   }
   int direct_index = 0;
-  while(direct_index < 10 && temp.direct[direct_index] != -1) {
+  while (direct_index < 10 && temp.direct[direct_index] != -1) {
     int data_index = temp.direct[direct_index];
     disk.seekg(sb.data_start + data_index * BLOCK_SIZE, ios::beg);
     char data[BLOCK_SIZE];
-    disk.read(data, min(fsize,BLOCK_SIZE));
+    disk.read(data, min(fsize, BLOCK_SIZE));
     cout << data;
     direct_index++;
     fsize -= BLOCK_SIZE;
   }
   cout << endl;
 }
-string read_from_user(){
-  //read one char at a time until '$' is encountered
+string read_from_user() {
+  // read one char at a time until '$' is encountered
   cout << "Enter the content after appending '$' to the end. \n";
   string s;
   char c;
   int i = 0;
-  while(cin.get(c)){
-    if(i == BLOCK_SIZE-1){
+  while (cin.get(c)) {
+    if (i == BLOCK_SIZE - 1) {
       cout << "Maximum charachers allowed is " << BLOCK_SIZE << endl;
       break;
     }
-    if(c == '$'){
+    if (c == '$') {
       break;
     }
     s += c;
@@ -229,7 +228,7 @@ void delete_file(fstream &disk, string fname) {
     cout << "file does not exist" << endl;
     return;
   }
-  if(files[fname].fd != -1){
+  if (files[fname].fd != -1) {
     cout << "file is open, close it first to delete" << endl;
     return;
   }
@@ -238,7 +237,7 @@ void delete_file(fstream &disk, string fname) {
   inode temp;
   disk.read((char *)&temp, sizeof(inode));
   int direct_index = 0;
-  while(direct_index < 10 && temp.direct[direct_index] != -1) {
+  while (direct_index < 10 && temp.direct[direct_index] != -1) {
     int data_index = temp.direct[direct_index];
     data_bitmap[data_index] = '0';
     direct_index++;
@@ -251,7 +250,7 @@ void delete_file(fstream &disk, string fname) {
   files.erase(fname);
   cout << "file deleted" << endl;
 }
-void write_file(fstream &disk,int fd) {
+void write_file(fstream &disk, int fd) {
   if (fd_to_file.find(fd) == fd_to_file.end()) {
     cout << "invalid fd" << endl;
     return;
@@ -266,13 +265,34 @@ void write_file(fstream &disk,int fd) {
   inode temp;
   disk.read((char *)&temp, sizeof(inode));
   string userinput = read_from_user();
-  int fsize = userinput.length();
+  temp.fsize = userinput.length();
   int direct_index = 0;
-  while(direct_index < 10 && temp.direct[direct_index] != -1){
-    
+  int data_index;
+  while (direct_index < 10 && temp.direct[direct_index] != -1) {
+    data_index = temp.direct[direct_index];
+    temp.direct[direct_index] = -1;
+    data_bitmap[data_index] = '0';
+    direct_index++;
   }
+  data_index = -1;
+  for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++) {
+    if (data_bitmap[i] == '0') {
+      data_bitmap[i] = '1';
+      data_index = i;
+      break;
+    }
+  }
+  direct_index = 0;
+  temp.direct[direct_index] = data_index;
+  disk.seekp(2 * BLOCK_SIZE, ios::beg);
+  disk.write(data_bitmap, NUM_OF_DATA_BLOCKS);
+  disk.seekp(sb.inode_start + inode_num * INODE_SIZE, ios::beg);
+  disk.write((char *)&temp, sizeof(inode));
+  disk.seekp(sb.data_start + data_index * BLOCK_SIZE, ios::beg);
+  disk.write(userinput.c_str(), temp.fsize);
+  cout << "file written" << endl;
 }
-void append_file(fstream &disk,int fd) {
+void append_file(fstream &disk, int fd) {
   if (fd_to_file.find(fd) == fd_to_file.end()) {
     cout << "invalid fd" << endl;
     return;
@@ -288,35 +308,42 @@ void append_file(fstream &disk,int fd) {
   disk.read((char *)&temp, sizeof(inode));
   int fsize = temp.fsize;
   int direct_index = 0;
-  while(direct_index < 10 && temp.direct[direct_index] != -1) {
+  while (direct_index < 10 && temp.direct[direct_index] != -1) {
+    if (fsize < BLOCK_SIZE)
+      break;
+    fsize -= BLOCK_SIZE;
     direct_index++;
   }
   if (direct_index == 10) {
     cout << "file is full" << endl;
     return;
   }
+
   int data_index = -1;
-  for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++) {
-    if (data_bitmap[i] == '0') {
-      data_bitmap[i] = '1';
-      data_index = i;
-      break;
+  if (fsize == 0) //find a free data block
+    for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++) {
+      if (data_bitmap[i] == '0') {
+        data_bitmap[i] = '1';
+        data_index = i;
+        break;
+      }
     }
-  }
-  
+  else // enough space in the current block
+    data_index = temp.direct[direct_index];
   if (data_index == -1) {
     cout << "no more data blocks, disk is full" << endl;
     return;
   }
+  //known bug : file size 
   string user_data = read_from_user();
   data_bitmap[data_index] = '1';
-  disk.seekp(2*BLOCK_SIZE, ios::beg);
+  disk.seekp(2 * BLOCK_SIZE, ios::beg);
   disk.write(data_bitmap, NUM_OF_DATA_BLOCKS);
   temp.direct[direct_index] = data_index;
-  temp.fsize += user_data.length();
+  temp.fsize += user_data.length(); 
   disk.seekp((3 * BLOCK_SIZE) + (inode_num * INODE_SIZE), ios::beg);
-  disk.write((char *)&temp, sizeof(inode)); 
-  disk.seekp(sb.data_start + data_index * BLOCK_SIZE, ios::beg);
+  disk.write((char *)&temp, sizeof(inode));
+  disk.seekp(sb.data_start + (data_index * BLOCK_SIZE + fsize), ios::beg);
   disk.write(user_data.c_str(), user_data.length());
   cout << "file appended" << endl;
 }
@@ -381,6 +408,7 @@ start:
         disk_mounted = true;
         cout << "disk mounted\n";
         while (disk_mounted) {
+          cout << "-----------------------\n";
           cout << "1. create file\n";
           cout << "2. open file\n";
           cout << "3. read file\n";
@@ -392,6 +420,7 @@ start:
           cout << "9. list open files\n";
           cout << "10. unmount\n";
           cout << "11. read disk\n";
+          cout << "-----------------------\n";
           cout << "Enter your choice: ";
           int choice;
           cin >> choice;
@@ -418,6 +447,13 @@ start:
             read_file(disk, fd);
             break;
           }
+          case 4: {
+            cout << "enter the fd: ";
+            int fd;
+            cin >> fd;
+            write_file(disk, fd);
+            break;
+          }
           case 5: {
             cout << "enter the fd: ";
             int fd;
@@ -429,7 +465,7 @@ start:
             cout << "enter the fd: ";
             int fd;
             cin >> fd;
-            if(fd_to_file.find(fd) == fd_to_file.end()) 
+            if (fd_to_file.find(fd) == fd_to_file.end())
               cout << "invalid fd\n";
             else {
               string fname = fd_to_file[fd];
