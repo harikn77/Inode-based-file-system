@@ -164,7 +164,7 @@ void open_file(string fname) {
   cout << "1. write mode\n";
   cout << "2. append mode\n";
   int mode;
-  cout << "select mode: ";
+  cout << ">> select mode: ";
   cin >> mode;
   files[fname].mode = mode;
   files[fname].fd = global_fd++;
@@ -320,7 +320,7 @@ void append_file(fstream &disk, int fd) {
   }
 
   int data_index = -1;
-  if (fsize == 0) //find a free data block
+  if (fsize == 0) // find a free data block
     for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++) {
       if (data_bitmap[i] == '0') {
         data_bitmap[i] = '1';
@@ -334,13 +334,13 @@ void append_file(fstream &disk, int fd) {
     cout << "no more data blocks, disk is full" << endl;
     return;
   }
-  //known bug : file size 
+  // known bug : file size
   string user_data = read_from_user();
   data_bitmap[data_index] = '1';
   disk.seekp(2 * BLOCK_SIZE, ios::beg);
   disk.write(data_bitmap, NUM_OF_DATA_BLOCKS);
   temp.direct[direct_index] = data_index;
-  temp.fsize += user_data.length(); 
+  temp.fsize += user_data.length();
   disk.seekp((3 * BLOCK_SIZE) + (inode_num * INODE_SIZE), ios::beg);
   disk.write((char *)&temp, sizeof(inode));
   disk.seekp(sb.data_start + (data_index * BLOCK_SIZE + fsize), ios::beg);
@@ -384,11 +384,11 @@ start:
     cout << "2. mount disk\n";
     cout << "3. exit\n";
     int choice;
-    cout << "Enter your choice: ";
+    cout << ">> Enter your choice: ";
     cin >> choice;
     switch (choice) {
     case 1: {
-      cout << "enter the name of the disk: ";
+      cout << ">> enter the name of the disk: ";
       string name;
       cin >> name;
       create_disk(name);
@@ -396,7 +396,7 @@ start:
       break;
     }
     case 2: {
-      cout << "enter the name of the disk: ";
+      cout << ">> enter the name of the disk: ";
       string name;
       cin >> name;
       fstream disk(name, ios::in | ios::out | ios::binary | ios::ate);
@@ -419,21 +419,21 @@ start:
           cout << "8. list files\n";
           cout << "9. list open files\n";
           cout << "10. unmount\n";
-          cout << "11. read disk\n";
+          // cout << "11. read disk\n";
           cout << "-----------------------\n";
-          cout << "Enter your choice: ";
+          cout << ">> Enter your choice: ";
           int choice;
           cin >> choice;
           switch (choice) {
           case 1: {
-            cout << "enter the name of the file: ";
+            cout << ">> enter the name of the file: ";
             string name;
             cin >> name;
             create_file(disk, name);
             break;
           }
           case 2: {
-            cout << "enter the name of the file: ";
+            cout << ">> enter the name of the file: ";
             string name;
             cin >> name;
             // check if file exists
@@ -441,28 +441,28 @@ start:
             break;
           }
           case 3: {
-            cout << "enter the fd: ";
+            cout << ">> enter the fd: ";
             int fd;
             cin >> fd;
             read_file(disk, fd);
             break;
           }
           case 4: {
-            cout << "enter the fd: ";
+            cout << ">> enter the fd: ";
             int fd;
             cin >> fd;
             write_file(disk, fd);
             break;
           }
           case 5: {
-            cout << "enter the fd: ";
+            cout << ">> enter the fd: ";
             int fd;
             cin >> fd;
             append_file(disk, fd);
             break;
           }
           case 6: {
-            cout << "enter the fd: ";
+            cout << ">> enter the fd: ";
             int fd;
             cin >> fd;
             if (fd_to_file.find(fd) == fd_to_file.end())
@@ -476,7 +476,7 @@ start:
             break;
           }
           case 7: {
-            cout << "enter the name of the file: ";
+            cout << ">> enter the name of the file: ";
             string name;
             cin >> name;
             delete_file(disk, name);
@@ -507,10 +507,10 @@ start:
             disk_mounted = false;
             goto start;
           }
-          case 11: {
-            read_disk(disk);
-            break;
-          }
+            // case 11: {
+            //   read_disk(disk);
+            //   break;
+            // }
             cout << endl;
           }
         }
