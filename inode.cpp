@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -8,7 +9,7 @@
 #include <vector>
 using namespace std;
 const int DISK_SIZE = 256 * 1024; // 256KB
-const int BLOCK_SIZE = 4096;      // 4KB
+const int BLOCK_SIZE = 1024;      // 1KB
 const int INODE_SIZE = 256;       // 256B
 const int NUM_OF_INODE_BLOCKS = 5;
 const int NUM_OF_INODES = NUM_OF_INODE_BLOCKS * (BLOCK_SIZE / INODE_SIZE);
@@ -193,15 +194,19 @@ void read_file(fstream &disk, int fd) {
     return;
   }
   int direct_index = 0;
+  char content[fsize+1];
   while (direct_index < 10 && temp.direct[direct_index] != -1) {
     int data_index = temp.direct[direct_index];
     disk.seekg(sb.data_start + data_index * BLOCK_SIZE, ios::beg);
     char data[BLOCK_SIZE];
     disk.read(data, min(fsize, BLOCK_SIZE));
-    cout << data;
+    // cout << data;
+    strncat(content, data, min(fsize, BLOCK_SIZE));
     direct_index++;
     fsize -= BLOCK_SIZE;
   }
+  content[fsize] = '\0';
+  printf("%s\n", content);
   cout << endl;
 }
 string read_from_user() {
@@ -211,10 +216,10 @@ string read_from_user() {
   char c;
   int i = 0;
   while (cin.get(c)) {
-    if (i == BLOCK_SIZE - 1) {
-      cout << "Maximum charachers allowed is " << BLOCK_SIZE << endl;
-      break;
-    }
+    // if (i == BLOCK_SIZE - 1) {
+    //   cout << "Maximum charachers allowed is " << BLOCK_SIZE << endl;
+    //   break;
+    // }
     if (c == '$') {
       break;
     }
@@ -265,7 +270,9 @@ void write_file(fstream &disk, int fd) {
   inode temp;
   disk.read((char *)&temp, sizeof(inode));
   string userinput = read_from_user();
-  temp.fsize = userinput.length();
+  int num_of_blocks = ceil((double)userinput.length() / BLOCK_SIZE);
+  // int copy_num_of_blocks = num_of_blocks;
+  temp.fsize = 0;
   int direct_index = 0;
   int data_index;
   while (direct_index < 10 && temp.direct[direct_index] != -1) {
@@ -275,21 +282,40 @@ void write_file(fstream &disk, int fd) {
     direct_index++;
   }
   data_index = -1;
-  for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++) {
+  vector<int> data_indices;
+  int j = 0;
+  for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++){
     if (data_bitmap[i] == '0') {
       data_bitmap[i] = '1';
-      data_index = i;
-      break;
+      // data_index = i;
+      data_indices.push_back(i);
+      // break;
+      j++;
+      if(j == num_of_blocks){
+        break;
+      }
     }
   }
-  direct_index = 0;
-  temp.direct[direct_index] = data_index;
+  if (data_indices.size() < num_of_blocks) {
+    cout << "not enough space to write" << endl;
+    return;
+  }
+  for (int i = 0; i < data_indices.size(); i++) {
+    temp.direct[i] = data_indices[i];
+    string chunk = userinput.substr(
+        i * BLOCK_SIZE,
+        min(int(userinput.length()) - i * BLOCK_SIZE, BLOCK_SIZE));
+    disk.seekp(sb.data_start + data_indices[i] * BLOCK_SIZE, ios::beg);
+    disk.write(chunk.c_str(), chunk.length());
+    temp.fsize += chunk.length();
+  }
+  // direct_index = 0;
+  // temp.direct[direct_index] = data_index;
   disk.seekp(2 * BLOCK_SIZE, ios::beg);
   disk.write(data_bitmap, NUM_OF_DATA_BLOCKS);
   disk.seekp(sb.inode_start + inode_num * INODE_SIZE, ios::beg);
   disk.write((char *)&temp, sizeof(inode));
-  disk.seekp(sb.data_start + data_index * BLOCK_SIZE, ios::beg);
-  disk.write(userinput.c_str(), temp.fsize);
+
   cout << "file written" << endl;
 }
 void append_file(fstream &disk, int fd) {
@@ -318,9 +344,8 @@ void append_file(fstream &disk, int fd) {
     cout << "file is full" << endl;
     return;
   }
-
   int data_index = -1;
-  if (fsize == 0) // find a free data block
+  if (fsize < 1) // find a free data block
     for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++) {
       if (data_bitmap[i] == '0') {
         data_bitmap[i] = '1';
@@ -334,17 +359,22 @@ void append_file(fstream &disk, int fd) {
     cout << "no more data blocks, disk is full" << endl;
     return;
   }
+  int remaining_space = BLOCK_SIZE - fsize;
+  cout << "Maximum data can be written is: " << remaining_space << endl;
   // known bug : file size
   string user_data = read_from_user();
+  int max_data_to_write = min(int(user_data.length()), remaining_space);
   data_bitmap[data_index] = '1';
   disk.seekp(2 * BLOCK_SIZE, ios::beg);
   disk.write(data_bitmap, NUM_OF_DATA_BLOCKS);
   temp.direct[direct_index] = data_index;
-  temp.fsize += user_data.length();
+  // temp.fsize += user_data.length();
+  temp.fsize += max_data_to_write;
   disk.seekp((3 * BLOCK_SIZE) + (inode_num * INODE_SIZE), ios::beg);
   disk.write((char *)&temp, sizeof(inode));
   disk.seekp(sb.data_start + (data_index * BLOCK_SIZE + fsize), ios::beg);
-  disk.write(user_data.c_str(), user_data.length());
+  // disk.write(user_data.c_str(), user_data.length());
+  disk.write(user_data.c_str(), max_data_to_write);
   cout << "file appended" << endl;
 }
 void read_disk(fstream &disk) {
