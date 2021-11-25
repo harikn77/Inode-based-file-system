@@ -140,7 +140,7 @@ void create_file(fstream &disk, string fname) {
   for (int i = 0; i < 10; i++) {
     new_inode.direct[i] = -1;
   }
-  // new_inode.direct[0] = data_index;
+  new_inode.direct[0] = data_index;
   new_inode.single_indirect = -1;
   new_inode.double_indirect = -1;
   disk.seekp((3 * BLOCK_SIZE) + (inode_index * INODE_SIZE), ios::beg);
@@ -194,7 +194,8 @@ void read_file(fstream &disk, int fd) {
     return;
   }
   int direct_index = 0;
-  char content[fsize+1];
+  char content[fsize + 1];
+  bzero(content,sizeof(content));
   while (direct_index < 10 && temp.direct[direct_index] != -1) {
     int data_index = temp.direct[direct_index];
     disk.seekg(sb.data_start + data_index * BLOCK_SIZE, ios::beg);
@@ -284,21 +285,21 @@ void write_file(fstream &disk, int fd) {
   data_index = -1;
   vector<int> data_indices;
   int j = 0;
-  for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++){
+  for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++) {
     if (data_bitmap[i] == '0') {
       data_bitmap[i] = '1';
       // data_index = i;
       data_indices.push_back(i);
       // break;
       j++;
-      if(j == num_of_blocks){
+      if (j == num_of_blocks || j == 10) {
         break;
       }
     }
   }
   if (data_indices.size() < num_of_blocks) {
-    cout << "not enough space to write" << endl;
-    return;
+    cout << "not enough space to write the entire file" << endl;
+    // return;
   }
   for (int i = 0; i < data_indices.size(); i++) {
     temp.direct[i] = data_indices[i];
@@ -316,7 +317,7 @@ void write_file(fstream &disk, int fd) {
   disk.seekp(sb.inode_start + inode_num * INODE_SIZE, ios::beg);
   disk.write((char *)&temp, sizeof(inode));
 
-  cout << "file written" << endl;
+  cout << "written " << temp.fsize << " bytes" << endl;
 }
 void append_file(fstream &disk, int fd) {
   if (fd_to_file.find(fd) == fd_to_file.end()) {
@@ -328,11 +329,72 @@ void append_file(fstream &disk, int fd) {
     cout << "file is not opened in append mode" << endl;
     return;
   }
+  string user_data = read_from_user();
+  int bytes_to_write = user_data.length();
   int inode_num = files[fname].inode_num;
   disk.seekg(sb.inode_start + (inode_num * INODE_SIZE), ios::beg);
   inode temp;
   disk.read((char *)&temp, sizeof(inode));
   int fsize = temp.fsize;
+  int num_of_current_blocks = max(int(ceil((double)fsize / BLOCK_SIZE)),1);
+  int reminder = fsize % BLOCK_SIZE;
+  int direct_index = num_of_current_blocks-1;
+  int data_index = temp.direct[direct_index];
+  int space_left = BLOCK_SIZE - reminder;
+  if (bytes_to_write <= space_left) {
+    disk.seekp(sb.data_start + data_index * BLOCK_SIZE + reminder, ios::beg);
+    disk.write(user_data.c_str(), bytes_to_write);
+    temp.fsize += bytes_to_write;
+  } else {
+    char *chunk = new char[space_left];
+    strncpy(chunk, user_data.c_str(), space_left);
+    disk.seekp(sb.data_start + data_index * BLOCK_SIZE + reminder, ios::beg);
+    disk.write(chunk, space_left);
+    temp.fsize += space_left;
+    delete[] chunk;
+    bytes_to_write -= space_left;
+    int num_of_blocks = ceil((double)bytes_to_write / BLOCK_SIZE);
+    vector<int> data_indices;
+    int j = 0;
+    for (int i = 0; i < NUM_OF_DATA_BLOCKS; i++) {
+      if(num_of_current_blocks == 10){
+        cout << "File is full, can't write anymore!\n";
+        break;
+      }
+      if (data_bitmap[i] == '0') {
+        data_bitmap[i] = '1';
+        // data_index = i;
+        data_indices.push_back(i);
+        // break;
+        j++;
+        num_of_current_blocks++;
+        if (j == num_of_blocks) {
+          break;
+        }
+      }
+    }
+    if (data_indices.size() < num_of_blocks) {
+      cout << "not enough space to write the entire file" << endl;
+      // return;
+    }
+    for (int i = 0; i < data_indices.size(); i++) {
+      temp.direct[direct_index + i +1] = data_indices[i];
+      string chunk = user_data.substr(
+          space_left + i * BLOCK_SIZE,
+          min(int(user_data.length()) - space_left - i * BLOCK_SIZE, BLOCK_SIZE));
+      disk.seekp(sb.data_start + data_indices[i] * BLOCK_SIZE, ios::beg);
+      disk.write(chunk.c_str(), chunk.length());
+      temp.fsize += chunk.length();
+    }
+  }
+  disk.seekp(2 * BLOCK_SIZE, ios::beg);
+  disk.write(data_bitmap, NUM_OF_DATA_BLOCKS);
+  disk.seekp(sb.inode_start + inode_num * INODE_SIZE, ios::beg);
+  disk.write((char *)&temp, sizeof(inode));
+  cout << "written " << temp.fsize - fsize << " bytes" << endl;
+
+  
+/*
   int direct_index = 0;
   while (direct_index < 10 && temp.direct[direct_index] != -1) {
     if (fsize < BLOCK_SIZE)
@@ -376,6 +438,7 @@ void append_file(fstream &disk, int fd) {
   // disk.write(user_data.c_str(), user_data.length());
   disk.write(user_data.c_str(), max_data_to_write);
   cout << "file appended" << endl;
+*/
 }
 void read_disk(fstream &disk) {
   disk.seekg(BLOCK_SIZE, ios::beg);
@@ -513,17 +576,22 @@ start:
             break;
           }
           case 8: {
-            cout << "files: ";
             for (auto it = files.begin(); it != files.end(); it++) {
-              cout << it->first << ", ";
+              cout << it->first << "\n";
             }
             cout << endl;
             break;
           }
           case 9: {
-            cout << "open files: ";
+            cout << "\n";
+            cout << "fd\tmode\tfile\n";
+            cout << "---------------------\n";
             for (auto it = fd_to_file.begin(); it != fd_to_file.end(); it++) {
-              cout << it->second << ", ";
+              string fname = it->second;
+              vector<string> modes{"read","write","append"};
+              int mode = files[fname].mode;
+              int fd = it->first;
+              cout << fd << "\t" << modes[mode] << "\t" << fname << "\n";
             }
             cout << endl;
             break;
