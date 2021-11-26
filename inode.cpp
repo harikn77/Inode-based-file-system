@@ -8,16 +8,17 @@
 #include <string>
 #include <vector>
 using namespace std;
-const int DISK_SIZE = 256 * 1024; // 256KB
-const int BLOCK_SIZE = 1024;      // 1KB
-const int INODE_SIZE = 256;       // 256B
-const int NUM_OF_INODE_BLOCKS = 5;
+const int DISK_SIZE = 500 * 1000 * 1000; // 500MB
+const int BLOCK_SIZE = 4000;      // 4KB
+const int INODE_SIZE = 250;       // 256B
+const int NUM_OF_BLOCKS = DISK_SIZE / BLOCK_SIZE;
+const int NUM_OF_INODE_BLOCKS = 5000;
 const int NUM_OF_INODES = NUM_OF_INODE_BLOCKS * (BLOCK_SIZE / INODE_SIZE);
-const int NUM_OF_DATA_BLOCKS = DISK_SIZE / BLOCK_SIZE;
+const int NUM_OF_DATA_BLOCKS = NUM_OF_BLOCKS - NUM_OF_INODE_BLOCKS;
 
 struct superblock {
-  int nblocks;
-  int ninodes;
+  int dblocks;
+  int inodes;
   int inode_start;
   int data_start;
 };
@@ -43,8 +44,8 @@ int global_fd;
 void create_disk(string disk_name) {
   ofstream disk(disk_name, ios::out | ios::binary | ios::trunc);
   superblock sb;
-  sb.nblocks = NUM_OF_DATA_BLOCKS;
-  sb.ninodes = NUM_OF_INODES;
+  sb.dblocks = NUM_OF_DATA_BLOCKS;
+  sb.inodes = NUM_OF_INODES;
   sb.inode_start = 3 * BLOCK_SIZE;
   sb.data_start = sb.inode_start + NUM_OF_INODE_BLOCKS * BLOCK_SIZE;
   disk.write((char *)&sb, sizeof(superblock));
@@ -67,8 +68,11 @@ void mount_disk(fstream &disk) {
   disk.seekg(0, ios::beg);
   disk.read((char *)&sb, sizeof(superblock));
   // cout << "superblock: " << endl;
-  // cout << "nblocks: " << sb.nblocks << endl;
-  // cout << "ninodes: " << sb.ninodes << endl;
+  // cout << "total blocks: " << NUM_OF_BLOCKS << endl;
+  // cout << "dblocks: " << sb.dblocks << endl;
+  // cout << "inodes: " << sb.inodes << endl;
+  // cout << "inode start at: "<< sb.inode_start << endl;
+  // cout << "data start at: " << sb.data_start << endl;
   disk.seekg(BLOCK_SIZE, ios::beg);
 
   disk.read(inode_bitmap, NUM_OF_INODES);
