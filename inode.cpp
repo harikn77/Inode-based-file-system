@@ -8,11 +8,11 @@
 #include <string>
 #include <vector>
 using namespace std;
-const int DISK_SIZE = 500 * 1000 * 1000; // 500MB
-const int BLOCK_SIZE = 4000;      // 4KB
-const int INODE_SIZE = 250;       // 256B
+const int DISK_SIZE = 256 * 1024; 
+const int BLOCK_SIZE = 1024;      
+const int INODE_SIZE = 256;       
 const int NUM_OF_BLOCKS = DISK_SIZE / BLOCK_SIZE;
-const int NUM_OF_INODE_BLOCKS = 5000;
+const int NUM_OF_INODE_BLOCKS = 5;
 const int NUM_OF_INODES = NUM_OF_INODE_BLOCKS * (BLOCK_SIZE / INODE_SIZE);
 const int NUM_OF_DATA_BLOCKS = NUM_OF_BLOCKS - NUM_OF_INODE_BLOCKS;
 
