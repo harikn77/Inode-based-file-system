@@ -171,6 +171,10 @@ void open_file(string fname) {
   int mode;
   cout << ">> select mode: ";
   cin >> mode;
+  if(mode != 0 && mode != 1 && mode != 2) {
+    cout << "invalid mode" << endl;
+    return;
+  }
   files[fname].mode = mode;
   files[fname].fd = global_fd++;
   fd_to_file[files[fname].fd] = fname;
