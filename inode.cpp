@@ -14,7 +14,7 @@ const int INODE_SIZE = 256;
 const int NUM_OF_BLOCKS = DISK_SIZE / BLOCK_SIZE;
 const int NUM_OF_INODE_BLOCKS = 5;
 const int NUM_OF_INODES = NUM_OF_INODE_BLOCKS * (BLOCK_SIZE / INODE_SIZE);
-const int NUM_OF_DATA_BLOCKS = NUM_OF_BLOCKS - NUM_OF_INODE_BLOCKS;
+const int NUM_OF_DATA_BLOCKS = NUM_OF_BLOCKS - NUM_OF_INODE_BLOCKS - 3; //1 superblock,2 bitmaps
 
 struct superblock {
   int dblocks;
