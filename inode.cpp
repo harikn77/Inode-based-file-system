@@ -9,7 +9,7 @@
 #include <vector>
 using namespace std;
 const int DISK_SIZE = 256 * 1024; 
-const int BLOCK_SIZE = 1024;      
+const int BLOCK_SIZE = 4096;      
 const int INODE_SIZE = 256;       
 const int NUM_OF_BLOCKS = DISK_SIZE / BLOCK_SIZE;
 const int NUM_OF_INODE_BLOCKS = 5;
